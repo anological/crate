@@ -755,7 +755,7 @@ function renderHome() {
 function recCard(r) {
   return '<div class="card"><div class="art">' + (r.art ? '<img src="' + esc(r.art) + '" loading="lazy" alt="">' : '<div class="art-fallback">♪</div>') + '</div>'
     + '<h3>' + esc(r.title) + '</h3><p>' + esc(r.artist) + '</p>'
-    + '<div class="reason">✦ ' + esc(r.reason) + '</div>'
+    + '<div class="reason">✦ ' + esc(r.reason || 'Picked for you') + '</div>'
     + '<div class="card-actions">'
     + (r.previewUrl ? '<button class="mini-btn" data-preview="' + esc(r.previewUrl) + '">▶ Preview</button>' : '')
     + '<button class="mini-btn primary" data-add-rec="' + esc(r.key) + '">＋ Add</button>'
