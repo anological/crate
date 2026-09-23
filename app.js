@@ -396,6 +396,12 @@ async function apiTrending() {
   const j = await r.json();
   return j.items || j.results || j || [];
 }
+async function apiRelated(videoId) {
+  const r = await fetch(API_BASE + '/api/yt/related?videoId=' + encodeURIComponent(videoId));
+  if (!r.ok) throw new Error('Related failed');
+  const j = await r.json();
+  return j.items || j.results || j || [];
+}
 async function itunesSearch(term, entity, limit) {
   const r = await fetch('https://itunes.apple.com/search?' + new URLSearchParams({
     term, entity, limit: String(limit || 8), media: 'music', country: 'US',
@@ -426,8 +432,12 @@ async function mbArtist(name) {
   }));
   const a = (j.artists || [])[0];
   if (!a) return null;
-  const full = await mbFetch('https://musicbrainz.org/ws/2/artist/' + a.id + '?' + new URLSearchParams({ fmt: 'json', inc: 'tags' }));
-  return { mbid: a.id, name: a.name, tags: (full.tags || []).map(t => t.name).sort((x, y) => 0) };
+  const full = await mbFetch('https://musicbrainz.org/ws/2/artist/' + a.id + '?' + new URLSearchParams({ fmt: 'json', inc: 'tags+artist-rels' }));
+  return {
+    mbid: a.id, name: a.name,
+    tags: (full.tags || []).map(t => t.name),
+    relations: (full.relations || []).map(r => r.artist && r.artist.name).filter(Boolean),
+  };
 }
 async function mbArtistsByTag(tag, limit) {
   const j = await mbFetch('https://musicbrainz.org/ws/2/artist/?' + new URLSearchParams({
@@ -445,7 +455,7 @@ async function resolveYouTube(title, artist) {
 
 /* ================= Auto recommendations ================= */
 const Recs = {
-  refreshing: false,
+  refreshPromise: null,
   seedArtists() {
     const byArtist = {};
     Store.db.songs.forEach(s => {
@@ -462,14 +472,16 @@ const Recs = {
     return this.refresh();
   },
   async refresh() {
-    if (this.refreshing) return Store.db.recCache || { items: [], ts: 0, partial: true };
-    this.refreshing = true;
-    try {
-      const items = await this.build();
-      Store.db.recCache = { ts: Date.now(), items };
-      Store.save();
-      return Store.db.recCache;
-    } finally { this.refreshing = false; }
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = (async () => {
+      try {
+        const items = await this.build();
+        Store.db.recCache = { ts: Date.now(), items };
+        Store.save();
+        return Store.db.recCache;
+      } finally { this.refreshPromise = null; }
+    })();
+    return this.refreshPromise;
   },
   collectedKeys() {
     const set = new Set(Store.db.songs.map(s => songKey(s.title, s.artist)));
@@ -486,18 +498,24 @@ const Recs = {
       if (skip.has(r.key) || seen.has(r.key)) return;
       seen.add(r.key); out.push(r);
     };
-    // 1) Similar artists via MusicBrainz tags -> top iTunes tracks
+    // 1) Similar artists: collaborators/relations first (works even without tags), then shared tags
     const similarPool = [];
     for (const seed of seeds.slice(0, 4)) {
       try {
         const info = await mbArtist(seed);
-        const tag = info && info.tags && info.tags[0];
-        if (!tag) continue;
-        const names = await mbArtistsByTag(tag, 8);
-        names.forEach(n => {
+        if (!info) continue;
+        (info.relations || []).forEach(n => {
           if (norm(n) !== norm(seed) && !similarPool.some(x => norm(x.name) === norm(n)))
             similarPool.push({ name: n, via: seed });
         });
+        const tag = info.tags && info.tags[0];
+        if (tag) {
+          const names = await mbArtistsByTag(tag, 8);
+          names.forEach(n => {
+            if (norm(n) !== norm(seed) && !similarPool.some(x => norm(x.name) === norm(n)))
+              similarPool.push({ name: n, via: seed });
+          });
+        }
       } catch (e) { /* offline or rate-limited: skip */ }
       if (similarPool.length >= 10) break;
     }
@@ -511,6 +529,22 @@ const Recs = {
         }));
       } catch (e) {}
       if (out.length >= 18) break;
+    }
+    // 1b) Related videos from your most-played tracks (YouTube's own recommendation graph)
+    const played = [...Store.db.songs]
+      .filter(s => s.src && s.src.type === 'yt' && (s.plays || 0) > 0)
+      .sort((a, b) => (b.plays || 0) - (a.plays || 0))
+      .slice(0, 3);
+    for (const seed of played) {
+      try {
+        const rel = await apiRelated(seed.src.videoId);
+        rel.slice(0, 4).forEach(v => push({
+          title: v.title, artist: v.channel, album: '',
+          art: v.thumb || ytThumb(v.id), previewUrl: '',
+          reason: 'Related to ' + seed.title, kind: 'similar', videoId: v.id,
+        }));
+      } catch (e) { /* endpoint unavailable: skip */ }
+      if (out.length >= 20) break;
     }
     // 2) New releases from your top artists
     for (const seed of seeds.slice(0, 3)) {
@@ -734,10 +768,13 @@ async function addRec(key, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
     let src = null, art = r.art || '', dur = 0;
-    const hit = await resolveYouTube(r.title, r.artist).catch(() => null);
-    if (hit) { src = { type: 'yt', videoId: hit.videoId }; art = art || hit.thumb; dur = hit.dur || 0; }
-    else if (r.previewUrl) src = { type: 'preview', url: r.previewUrl };
-    else src = { type: 'none' };
+    if (r.videoId) { src = { type: 'yt', videoId: r.videoId }; }
+    else {
+      const hit = await resolveYouTube(r.title, r.artist).catch(() => null);
+      if (hit) { src = { type: 'yt', videoId: hit.videoId }; art = art || hit.thumb; dur = hit.dur || 0; }
+      else if (r.previewUrl) src = { type: 'preview', url: r.previewUrl };
+      else src = { type: 'none' };
+    }
     const added = Store.addSong({ title: r.title, artist: r.artist, album: r.album || '', art, dur, src });
     if (!added) { toast('Already in your collection.'); }
     else {
@@ -910,7 +947,7 @@ function renderForYou() {
     box.innerHTML =
       (sim.length ? sectionHead('Because of your taste') + '<div class="grid-cards">' + sim.map(recCard).join('') + '</div>' : '')
       + (nw.length ? sectionHead('New from artists you collect') + '<div class="grid-cards">' + nw.map(recCard).join('') + '</div>' : '')
-      + '<p style="color:var(--dim);font-size:12px;margin-top:22px">Sources: community music data (MusicBrainz) + iTunes catalogue. Previews are 30 seconds; adding a track links full-length audio automatically.</p>';
+      + '<p style="color:var(--dim);font-size:12px;margin-top:22px">Sources: community music data (MusicBrainz), the iTunes catalogue and YouTube. Previews are 30 seconds; adding a track links full-length audio automatically.</p>';
   };
   Recs.get().then(paint).catch(() => { const box = $('#rec-list'); if (box) box.innerHTML = '<div class="empty"><h3>Could not load recommendations</h3><p>Check your connection and try again.</p></div>'; });
   $('#rec-refresh').onclick = async e => {
