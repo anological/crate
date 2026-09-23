@@ -923,6 +923,7 @@ function renderForYou() {
 
 /* ================= ADD MUSIC ================= */
 let addTab = 'youtube';
+const addState = { youtube: { q: '', results: [] }, itunes: { q: '', results: [] } };
 function renderAdd() {
   const v = $('#view');
   v.innerHTML = '<div class="tabs">'
@@ -974,32 +975,44 @@ async function addSearchResult(payload, btn) {
 }
 function addYouTube() {
   const body = $('#add-body');
-  body.innerHTML = '<div class="toolbar"><input type="search" id="yt-q" placeholder="Search songs, artists…"></div><div id="yt-res"></div>';
+  const st = addState.youtube;
+  body.innerHTML = '<div class="toolbar"><input type="search" id="yt-q" placeholder="Search songs, artists…" value="' + esc(st.q) + '"></div><div id="yt-res"></div>';
+  const paint = () => {
+    $('#yt-res').innerHTML = st.results.length ? st.results.map(r => addResultRow(r, 'youtube')).join('')
+      : (st.q ? '<div class="empty"><h3>No results</h3></div>' : '');
+  };
+  paint();
   const run = debounce(async () => {
     const q = $('#yt-q').value.trim();
-    if (q.length < 2) { $('#yt-res').innerHTML = ''; return; }
+    st.q = q;
+    if (q.length < 2) { st.results = []; $('#yt-res').innerHTML = ''; return; }
     $('#yt-res').innerHTML = '<div class="spin"></div>';
     try {
-      const items = await apiSearchYouTube(q);
-      $('#yt-res').innerHTML = items.length ? items.map(r => addResultRow(r, 'youtube')).join('')
-        : '<div class="empty"><h3>No results</h3></div>';
+      st.results = await apiSearchYouTube(q);
+      paint();
     } catch (e) { $('#yt-res').innerHTML = '<div class="empty"><h3>Search failed</h3><p>Check your connection.</p></div>'; }
   }, 450);
   $('#yt-q').addEventListener('input', run);
 }
 function addItunes() {
   const body = $('#add-body');
-  body.innerHTML = '<div class="toolbar"><input type="search" id="it-q" placeholder="Search the iTunes catalogue…"></div>'
+  const st = addState.itunes;
+  body.innerHTML = '<div class="toolbar"><input type="search" id="it-q" placeholder="Search the iTunes catalogue…" value="' + esc(st.q) + '"></div>'
     + '<p style="color:var(--dim);font-size:12.5px">Previews are 30 seconds — adding links the full-length track automatically.</p><div id="it-res"></div>';
+  const paint = () => {
+    $('#it-res').innerHTML = st.results.length ? st.results.map(t => addResultRow(t, 'itunes')).join('')
+      : (st.q ? '<div class="empty"><h3>No results</h3></div>' : '');
+  };
+  paint();
   const run = debounce(async () => {
     const q = $('#it-q').value.trim();
-    if (q.length < 2) { $('#it-res').innerHTML = ''; return; }
+    st.q = q;
+    if (q.length < 2) { st.results = []; $('#it-res').innerHTML = ''; return; }
     $('#it-res').innerHTML = '<div class="spin"></div>';
     try {
       const items = await itunesSearch(q, 'song', 15);
-      const tracks = items.filter(t => t.wrapperType === 'track');
-      $('#it-res').innerHTML = tracks.length ? tracks.map(t => addResultRow(t, 'itunes')).join('')
-        : '<div class="empty"><h3>No results</h3></div>';
+      st.results = items.filter(t => t.wrapperType === 'track');
+      paint();
     } catch (e) { $('#it-res').innerHTML = '<div class="empty"><h3>Search failed</h3><p>Check your connection.</p></div>'; }
   }, 450);
   $('#it-q').addEventListener('input', run);
