@@ -396,8 +396,10 @@ async function apiTrending() {
   const j = await r.json();
   return j.items || j.results || j || [];
 }
-async function apiRelated(videoId) {
-  const r = await fetch(API_BASE + '/api/yt/related?videoId=' + encodeURIComponent(videoId));
+async function apiRelated(song) {
+  const r = await fetch(API_BASE + '/api/yt/related?' + new URLSearchParams({
+    videoId: song.src.videoId, title: song.title || '', artist: song.artist || '',
+  }));
   if (!r.ok) throw new Error('Related failed');
   const j = await r.json();
   return j.items || j.results || j || [];
@@ -537,7 +539,7 @@ const Recs = {
       .slice(0, 3);
     for (const seed of played) {
       try {
-        const rel = await apiRelated(seed.src.videoId);
+        const rel = await apiRelated(seed);
         rel.slice(0, 4).forEach(v => push({
           title: v.title, artist: v.channel, album: '',
           art: v.thumb || ytThumb(v.id), previewUrl: '',
