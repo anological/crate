@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crate — your personal music collection</title>
+<meta name="description" content="Crate — collect the music you love, get automatic recommendations for what's next.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231db954'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>C</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand"><span class="brand-mark">C</span><span class="brand-name">Crate</span></div>
+    <nav id="nav">
+      <button class="nav-item" data-view="home"><span class="nav-ico">⌂</span>Home</button>
+      <button class="nav-item" data-view="collection"><span class="nav-ico">♫</span>Collection</button>
+      <button class="nav-item" data-view="albums"><span class="nav-ico">▦</span>Albums</button>
+      <button class="nav-item" data-view="artists"><span class="nav-ico">☺</span>Artists</button>
+      <button class="nav-item" data-view="foryou"><span class="nav-ico">✦</span>For You</button>
+      <button class="nav-item nav-add" data-view="add"><span class="nav-ico">＋</span>Add Music</button>
+    </nav>
+    <div class="side-foot">
+      <button id="export-btn" class="ghost-btn" title="Download a backup of your collection">⤓ Backup</button>
+      <button id="import-btn" class="ghost-btn" title="Restore from a backup file">⤒ Restore</button>
+      <input type="file" id="import-file" accept="application/json" hidden>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <button id="menu-btn" aria-label="Menu">☰</button>
+      <div id="crumb">Home</div>
+      <div class="top-actions">
+        <input id="global-search" type="search" placeholder="Search your collection…" autocomplete="off">
+      </div>
+    </header>
+    <div id="view"></div>
+  </main>
+
+  <nav id="mobile-nav">
+    <button class="mnav-item" data-view="home">⌂<small>Home</small></button>
+    <button class="mnav-item" data-view="collection">♫<small>Music</small></button>
+    <button class="mnav-item" data-view="foryou">✦<small>For You</small></button>
+    <button class="mnav-item" data-view="add">＋<small>Add</small></button>
+  </nav>
+</div>
+
+<div id="playerbar" class="hidden">
+  <div class="pb-left">
+    <div id="pb-art" class="pb-art"></div>
+    <div class="pb-meta">
+      <div id="pb-title">—</div>
+      <div id="pb-artist">—</div>
+    </div>
+    <button id="pb-like" class="icon-btn" title="Like">♡</button>
+  </div>
+  <div class="pb-center">
+    <div class="pb-controls">
+      <button id="pb-prev" class="icon-btn" title="Previous">⏮</button>
+      <button id="pb-play" class="play-btn" title="Play/Pause" aria-label="Play">▶</button>
+      <button id="pb-next" class="icon-btn" title="Next">⏭</button>
+    </div>
+    <div class="pb-time">
+      <span id="pb-cur">0:00</span>
+      <input id="pb-seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+      <span id="pb-dur">0:00</span>
+    </div>
+  </div>
+  <div class="pb-right">
+    <span id="pb-src" class="pb-src" title="Audio source"></span>
+    <button id="pb-mute" class="icon-btn" title="Mute">🔊</button>
+    <input id="pb-vol" type="range" min="0" max="100" value="90" aria-label="Volume">
+  </div>
+</div>
+
+<div id="yt-slot" aria-hidden="true"></div>
+<div id="toasts"></div>
+<div id="modal-root"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
